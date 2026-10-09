@@ -1,0 +1,16 @@
+PUBLICAR NO GITHUB PAGES (grátis)
+1. github.com -> New repository -> nome: leituras -> Public -> Create.
+2. "uploading an existing file": arraste TODOS os arquivos desta pasta
+   (index.html, local-db.js, sw.js, manifest.webmanifest, icon-180.png, icon-512.png) -> Commit changes.
+3. Settings -> Pages -> Source: "Deploy from a branch" -> Branch: main, pasta / (root) -> Save.
+4. Em ~1 minuto o endereço aparece: https://SEU-USUARIO.github.io/leituras/
+
+INSTALAR NO IPHONE
+1. Abra o endereço no SAFARI (precisa ser o Safari).
+2. Compartilhar -> "Adicionar à Tela de Início" -> Adicionar.
+3. Abra sempre pelo ícone. Funciona offline e não expira.
+Dica: abra o app uma vez com internet para baixar as fontes.
+
+DADOS
+Ficam só no iPhone (no ícone instalado). Metas -> Cópia de segurança -> Exportar de vez em quando.
+Para trazer seus 5 livros atuais: Metas -> Importar -> escolha leituras-backup-inicial.json (enviado à parte).

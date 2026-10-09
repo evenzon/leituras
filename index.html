@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#E7E5DE">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Leituras">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<script src="local-db.js"></script>
+<title>Minhas Leituras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+/* Pôster de catálogo: papel cinza-quente, molduras em grade (4 colunas), numeração mono sob cada capa, rodapé editorial centralizado. Um mês por página; índice do ano; ficha de cada livro. */
+:root{
+  --paper:#E7E5DE; --ink:#1A1A18; --ink-2:#5C5A53; --line:#B8B5AB; --plate:#D5D2C9; --plate-2:#C7C4BA;
+  --bad:#A3271F; --scrim:rgba(231,229,222,.84); --lift:rgba(20,20,16,.42); --grain:.9;
+  --f-mono:'DM Mono','IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  --f-serif:'Newsreader','Times New Roman',Georgia,serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#151513; --ink:#E7E4DB; --ink-2:#9B988F; --line:#3A3934; --plate:#242321; --plate-2:#2F2E2A;
+  --bad:#FF8A80; --scrim:rgba(21,21,19,.86); --lift:rgba(0,0,0,.7); --grain:0;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#151513; --ink:#E7E4DB; --ink-2:#9B988F; --line:#3A3934; --plate:#242321; --plate-2:#2F2E2A;
+  --bad:#FF8A80; --scrim:rgba(21,21,19,.86); --lift:rgba(0,0,0,.7); --grain:0;
+  color-scheme:dark}
+
+*,*::before,*::after{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-serif);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:var(--grain);mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.mono{font-family:var(--f-mono)}
+.caps{text-transform:uppercase;letter-spacing:.06em}
+
+.app{position:relative;z-index:1;max-width:1000px;margin:0 auto;padding-inline:clamp(16px,5vw,40px);padding-block:8px 64px}
+.banner{border:1px solid var(--ink);padding:10px 14px;font:400 13px var(--f-mono);margin-top:12px}
+
+/* barra superior */
+.bar{display:flex;justify-content:space-between;align-items:center;gap:6px 16px;flex-wrap:wrap;padding-block:14px 0}
+.bar-r{display:flex;align-items:center;gap:2px 14px;flex-wrap:wrap}
+.tbtn{font:400 12px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;background:none;border:0;border-bottom:1px solid transparent;border-radius:0;padding:8px 2px;min-height:40px;color:var(--ink);display:inline-flex;align-items:center;gap:8px}
+.tbtn:hover{border-bottom-color:var(--ink)}
+.tbtn:disabled{opacity:.4;cursor:not-allowed}
+.sbtn{font:400 12px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;background:var(--ink);color:var(--paper);border:1px solid var(--ink);border-radius:0;padding:9px 16px;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
+.sbtn:hover{opacity:.86}
+.sbtn.line{background:transparent;color:var(--ink)}
+.sbtn.line:hover{background:var(--ink);color:var(--paper);opacity:1}
+.sbtn.danger{background:transparent;color:var(--bad);border-color:var(--bad)}
+.sbtn:disabled{opacity:.4;cursor:not-allowed}
+.hoje b{font-weight:500}
+
+/* réguas (progresso) */
+.tk{background:
+  repeating-linear-gradient(90deg,var(--tk) 0 1px,transparent 1px var(--t1,4px)) left bottom/100% 45% no-repeat,
+  repeating-linear-gradient(90deg,var(--tk) 0 1px,transparent 1px var(--t2,20px)) left bottom/100% 100% no-repeat}
+.ruler{display:block;position:relative;height:12px;--tk:color-mix(in srgb,var(--ink) 30%,transparent)}
+.ruler i{display:block;height:100%;overflow:hidden;--tk:var(--ink)}
+.ruler.mini{width:54px;height:10px}
+.ruler.big{height:24px;--t1:6px;--t2:30px}
+
+/* pôster mensal */
+.stage{padding-block:clamp(28px,6vw,72px) 0}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:36px 22px;width:min(100%,600px);margin:0 auto}
+.item{display:block;width:100%;text-align:left;background:none;border:0;padding:0;border-radius:0;position:relative;transform-origin:center 45%;transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+.plate{display:block;background:var(--plate);transition:box-shadow .4s}
+.img{display:block;position:relative;aspect-ratio:2/3;overflow:hidden;background:var(--plate-2);container-type:inline-size}
+.img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1) contrast(1.05);transition:filter .4s}
+.color .img img{filter:none}
+.strip{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:22px;padding:0 5px 4px}
+.strip .ruler{flex:1;min-width:0}
+.strip .lab{font:400 8px/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.nums{display:flex;justify-content:space-between;gap:4px;font:400 13px/1 var(--f-mono);padding-top:5px;min-height:19px}
+.ph{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:11% 10%;box-shadow:inset 0 0 0 1px var(--line);background:color-mix(in srgb,var(--plate-2) calc(100% - var(--tn,0%)),var(--ink))}
+.ph .pt{font:500 14cqw/1.05 var(--f-serif);overflow:hidden;display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+.ph .pa{font:400 7cqw/1.2 var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);overflow:hidden;max-height:3.6em}
+.ghost{cursor:default}
+.ghost .img{background:none;box-shadow:inset 0 0 0 1px var(--line);opacity:.7}
+.ghost .strip{opacity:.4}
+.ghost .nums{color:var(--ink-2);opacity:.5}
+.ghost.on{cursor:pointer}
+.ghost .plus{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font:300 28px var(--f-mono);color:var(--ink-2)}
+.ghost .plus small{font:400 8px var(--f-mono);letter-spacing:.07em;text-transform:uppercase}
+@media (hover:hover){
+  .item:not(.ghost:not(.on)):hover{transform:scale(1.07);z-index:3}
+  .item:not(.ghost:not(.on)):hover .plate{box-shadow:0 18px 32px -14px var(--lift)}
+  .item:hover .img img{filter:none}
+}
+.item:focus-visible{transform:scale(1.07);z-index:3;outline-offset:5px}
+.item:focus-visible .img img{filter:none}
+.empty-note{width:min(100%,600px);margin:26px auto 0;text-align:center;font:400 13px/1.5 var(--f-mono);color:var(--ink-2)}
+
+/* tira de dias */
+.days{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 11px;width:min(100%,600px);margin:48px auto 0;font:400 11px var(--f-mono);color:var(--ink-2)}
+.days span{padding:1px 0}
+.days .r{color:var(--ink);border-bottom:2px solid var(--ink)}
+.days .t{outline:1px solid var(--ink);outline-offset:3px;color:var(--ink)}
+
+/* rodapé editorial */
+.colo{margin-top:44px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:1px}
+.c1{display:flex;align-items:center;gap:6px;font:400 14px var(--f-mono);letter-spacing:.07em;text-transform:uppercase}
+.c1 .mo{padding:0 10px}
+.arrow{background:none;border:0;font:300 20px/1 var(--f-mono);width:44px;height:44px;border-radius:0;color:var(--ink)}
+.arrow:hover{transform:scale(1.25)}
+.c2,.c4,.c5{font:400 14px/1.3 var(--f-serif)}
+.c3{font:500 14px/1.4 var(--f-mono);letter-spacing:.03em;text-transform:uppercase}
+.colo .tbtn{margin-top:14px;font-size:11px;color:var(--ink-2)}
+
+/* índice do ano */
+.y-head{display:flex;align-items:center;justify-content:center;gap:6px;font:400 14px var(--f-mono);letter-spacing:.07em;text-transform:uppercase}
+.y-head h2{margin:0;font:inherit;padding:0 12px}
+.y-sub{text-align:center;font:400 12px/1.6 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);margin:2px 0 0}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr));gap:34px 24px;margin-top:40px}
+.mcard{display:block;text-align:left;background:none;border:0;padding:0;border-radius:0;transition:transform .4s cubic-bezier(.2,.7,.2,1)}
+@media (hover:hover){.mcard:hover{transform:scale(1.05);z-index:2;position:relative}.mcard:hover .mos .img img{filter:none}}
+.mcard:focus-visible{transform:scale(1.05)}
+.mos{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;background:var(--plate);padding:3px}
+.mos .img{aspect-ratio:2/3}
+.mos .blank{aspect-ratio:2/3;background:none;box-shadow:inset 0 0 0 1px var(--line);opacity:.55}
+.mc-t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding-top:7px;font:400 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.mc-t b{font-weight:500}
+.mc-s{font:400 11px var(--f-mono);color:var(--ink-2);letter-spacing:.04em;text-transform:uppercase;min-height:16px}
+.mcard.cur .mc-t span::after{content:" ●";font-size:8px;vertical-align:2px}
+.wl{width:min(100%,600px);margin:56px auto 0}
+.wl h3,.sec h3{font:400 12px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;margin:0 0 6px;padding-bottom:8px;border-bottom:1px solid var(--ink)}
+.rows{list-style:none;margin:0;padding:0}
+.rw{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 14px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.rw b{font:500 16px var(--f-serif);overflow-wrap:anywhere}
+.rw small{display:block;font:400 11px var(--f-mono);color:var(--ink-2);text-transform:uppercase;letter-spacing:.05em}
+.muted{color:var(--ink-2);font:400 13px/1.5 var(--f-mono);margin:10px 0 0}
+
+/* ficha do livro */
+.scrim{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:var(--scrim);backdrop-filter:blur(2px)}
+#m-detail{z-index:20}#m-log,#m-book,#m-goals{z-index:30}
+.sheet{background:var(--paper);border:1px solid var(--ink);width:min(520px,100%);max-height:100%;overflow:auto;padding:26px}
+.sheet.wide{width:min(900px,100%);padding:clamp(18px,4vw,36px);position:relative}
+.sheet h2{font:500 26px/1.15 var(--f-serif);margin:0 0 4px}
+.sheet .sub{color:var(--ink-2);font:400 12px/1.5 var(--f-mono);margin:0 0 16px}
+.close{position:absolute;top:10px;right:12px}
+.d-grid{display:grid;grid-template-columns:minmax(0,230px) minmax(0,1fr);gap:clamp(20px,4vw,40px);align-items:start;margin-top:14px}
+.d-plate{background:var(--plate)}
+.d-info h2{font:500 clamp(26px,4.5vw,38px)/1.08 var(--f-serif);letter-spacing:-.01em;margin:6px 0 6px;overflow-wrap:anywhere;text-wrap:balance}
+.d-au{font:400 12px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;margin:0 0 20px}
+.eb{font:400 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);margin:0}
+.d-prog{margin-bottom:18px}
+.d-prog p{font:400 12px var(--f-mono);letter-spacing:.05em;text-transform:uppercase;margin:8px 0 0}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px;margin:0 0 20px}
+.facts div{border-top:1px solid var(--line);padding-top:6px}
+.facts dt{font:400 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.facts dd{margin:2px 0 0;font:500 17px/1.25 var(--f-serif)}
+.facts dd small{font:400 12px var(--f-serif);color:var(--ink-2)}
+.d-acts{display:flex;flex-wrap:wrap;gap:8px}
+.sec{margin-top:34px}
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart text{font:400 9px var(--f-mono);fill:var(--ink-2)}
+.chart .ax{stroke:var(--line);stroke-width:1}
+.chart .tot{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:3 3}
+.chart .ln{fill:none;stroke:var(--ink);stroke-width:1.5}
+.chart .dt{fill:var(--ink)}
+.lg{margin-top:18px}
+.lg:first-of-type{margin-top:6px}
+.lg-h{display:flex;justify-content:space-between;gap:8px;font:400 11px var(--f-mono);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);padding:6px 0;border-bottom:1px solid var(--ink)}
+.se{display:grid;grid-template-columns:32px minmax(0,1fr) auto auto;gap:4px 12px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line)}
+.se .d{font:400 14px var(--f-mono)}
+.se .n{font:400 14px/1.35 var(--f-serif);color:var(--ink-2);overflow-wrap:anywhere;font-style:italic}
+.se .a{font:400 12px var(--f-mono);white-space:nowrap}
+.x{background:none;border:0;border-radius:0;color:var(--ink-2);font:400 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;min-width:32px;min-height:32px;padding:0 6px}
+.x:hover{color:var(--bad)}
+.x.conf{color:var(--bad);border:1px solid var(--bad)}
+
+/* formulários */
+.f{display:flex;flex-direction:column;gap:16px}
+.fld{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fld label{font:400 10px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.fld input,.fld select,.fld textarea{background:transparent;border:0;border-bottom:1px solid var(--ink);border-radius:0;padding:9px 2px;font:400 16px var(--f-mono);min-height:44px;width:100%}
+.fld select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);background-position:calc(100% - 12px) 50%,calc(100% - 7px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:24px}
+.fld option{background:var(--paper);color:var(--ink)}
+.fld textarea{resize:vertical;min-height:60px;font-family:var(--f-serif);font-size:17px}
+.fld input[type=file]{font-size:13px;padding:10px 0}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.hint{font:400 12px/1.5 var(--f-mono);color:var(--ink-2);margin:0;min-height:18px}
+.err{font:400 12px var(--f-mono);color:var(--bad);margin:0}
+.acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.acts .sp{margin-right:auto}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 18px;font:400 12px var(--f-mono);letter-spacing:.04em;z-index:40;max-width:calc(100% - 32px)}
+
+@media (max-width:640px){
+  .d-grid{grid-template-columns:1fr}
+  .d-plate{width:min(60%,230px)}
+}
+@media (max-width:520px){
+  .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:30px 14px}
+  .nums{font-size:12px}
+  .se{grid-template-columns:28px minmax(0,1fr) auto}
+  .se .a{grid-column:2}
+}
+@media (max-width:560px){
+  .scrim{align-items:flex-end;padding:0}
+  .sheet{border-width:1px 0 0;padding-bottom:calc(26px + env(safe-area-inset-bottom,0px))}
+}
+@media (prefers-reduced-motion:reduce){.item,.mcard,.plate,.img img,.arrow{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="app" id="app">
+  <header class="bar">
+    <button class="tbtn hoje" type="button" id="hoje" data-action="open-goals" aria-label="Metas e sequência"></button>
+    <nav class="bar-r" aria-label="Ações">
+      <button class="tbtn" type="button" id="btn-view" data-action="toggle-view">Índice</button>
+      <button class="tbtn" type="button" data-action="open-book">+ Livro</button>
+      <button class="sbtn" type="button" data-action="open-log">Registrar leitura</button>
+    </nav>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <main class="stage" id="stage"></main>
+</div>
+
+<!-- Ficha do livro -->
+<div class="scrim" id="m-detail" hidden>
+  <article class="sheet wide" id="d-sheet" role="dialog" aria-modal="true" aria-labelledby="d-title"></article>
+</div>
+
+<!-- Registrar leitura -->
+<div class="scrim" id="m-log" hidden>
+  <form class="sheet f" id="f-log" role="dialog" aria-modal="true" aria-labelledby="t-log" novalidate>
+    <div><h2 id="t-log">Registrar leitura</h2><p class="sub">Quanto você leu agora?</p></div>
+    <div class="fld"><label for="s-book">Livro</label><select id="s-book"></select></div>
+    <div class="two">
+      <div class="fld"><label for="s-pages">Páginas lidas</label><input id="s-pages" type="number" inputmode="numeric" min="1" step="1" placeholder="18"></div>
+      <div class="fld"><label for="s-stop">Parei na página</label><input id="s-stop" type="number" inputmode="numeric" min="1" step="1" placeholder="160"></div>
+    </div>
+    <p class="hint" id="s-hint"></p>
+    <div class="two">
+      <div class="fld"><label for="s-min">Minutos (opcional)</label><input id="s-min" type="number" inputmode="numeric" min="0" step="1" placeholder="25"></div>
+      <div class="fld"><label for="s-date">Dia</label><input id="s-date" type="date"></div>
+    </div>
+    <div class="fld"><label for="s-note">Anotação (opcional)</label><textarea id="s-note" maxlength="280" placeholder="Uma frase, uma ideia, onde você leu"></textarea></div>
+    <p class="err" id="s-err" hidden></p>
+    <div class="acts"><button class="sbtn line" type="button" data-action="close">Cancelar</button><button class="sbtn" type="submit" id="s-save">Salvar leitura</button></div>
+  </form>
+</div>
+
+<!-- Livro -->
+<div class="scrim" id="m-book" hidden>
+  <form class="sheet f" id="f-book" role="dialog" aria-modal="true" aria-labelledby="t-book" novalidate>
+    <div><h2 id="t-book">Novo livro</h2><p class="sub" id="b-sub">Cadastre o que você quer acompanhar.</p></div>
+    <div class="fld"><label for="b-title">Título</label><input id="b-title" type="text" maxlength="140" autocomplete="off"></div>
+    <div class="fld"><label for="b-author-sel">Autor</label><select id="b-author-sel"></select></div>
+    <div class="fld" id="b-author-new-w" hidden><label for="b-author">Nome do novo autor</label><input id="b-author" type="text" maxlength="100" autocomplete="off"></div>
+    <div class="two">
+      <div class="fld"><label for="b-total">Total de páginas</label><input id="b-total" type="number" inputmode="numeric" min="1" step="1"></div>
+      <div class="fld"><label for="b-status">Situação</label>
+        <select id="b-status"><option value="lendo">Lendo</option><option value="quero">Quero ler</option><option value="concluido">Concluído</option></select></div>
+    </div>
+    <div class="fld" id="b-cur-w"><label for="b-current">Página atual</label><input id="b-current" type="number" inputmode="numeric" min="0" step="1" value="0"></div>
+    <div class="fld" id="b-rat-w" hidden><label for="b-rating">Nota</label>
+      <select id="b-rating"><option value="">Sem nota</option><option value="5">5, excelente</option><option value="4">4, muito bom</option><option value="3">3, bom</option><option value="2">2, fraco</option><option value="1">1, não recomendo</option></select></div>
+    <div class="fld" id="b-cov-w"><label for="b-cover">Capa (imagem, opcional)</label><input id="b-cover" type="file" accept="image/*"></div>
+    <p class="err" id="b-err" hidden></p>
+    <div class="acts">
+      <button class="sbtn danger sp" type="button" id="b-del" hidden>Excluir livro</button>
+      <button class="sbtn line" type="button" data-action="close">Cancelar</button><button class="sbtn" type="submit" id="b-save">Salvar livro</button>
+    </div>
+  </form>
+</div>
+
+<!-- Metas -->
+<div class="scrim" id="m-goals" hidden>
+  <form class="sheet f" id="f-goals" role="dialog" aria-modal="true" aria-labelledby="t-goals" novalidate>
+    <div><h2 id="t-goals">Suas metas</h2><p class="sub">Metas pequenas e constantes funcionam melhor que grandes e raras.</p></div>
+    <div class="fld"><label for="g-daily">Páginas por dia</label><input id="g-daily" type="number" inputmode="numeric" min="1" step="1"></div>
+    <div class="fld"><label for="g-yearly">Livros por ano</label><input id="g-yearly" type="number" inputmode="numeric" min="1" step="1"></div>
+    <p class="err" id="g-err" hidden></p>
+    <div class="fld"><label>Cópia de segurança</label><div class="acts" style="justify-content:flex-start"><button class="sbtn line" type="button" id="bk-out">Exportar</button><button class="sbtn line" type="button" id="bk-in">Importar</button></div><p class="sub" style="margin-top:6px">Os dados ficam só neste aparelho. Exporte de vez em quando.</p><input type="file" id="bk-file" accept="application/json,.json" hidden></div>
+    <div class="acts"><button class="sbtn line" type="button" data-action="close">Cancelar</button><button class="sbtn" type="submit">Salvar metas</button></div>
+  </form>
+</div>
+
+<input type="file" id="cover-pick" accept="image/*" hidden>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var DOW=['dom','seg','ter','qua','qui','sex','sáb'];
+var MON=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+var MONL=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+/* estado */
+var db=null, dbFailed=false;
+var books=[], sessions=[], goals={dailyPages:20,yearlyBooks:12};
+var got={books:false,sessions:false,goals:false};
+var T0=new Date();
+var view={mode:'month',y:T0.getFullYear(),m:T0.getMonth()};
+var detailId=null, confirmDel=null, confirmBookDel=false, editingId=null, lastFocus=null, toastT=null, raf=0, coverTarget=null;
+var colorMode=false;
+try{colorMode=localStorage.getItem('leituras-cor')==='1'}catch(e){}
+
+/* utilidades */
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function parse(s){var p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2])}
+function addDays(d,n){var x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function short(k){var d=parse(k);return d.getDate()+' '+MON[d.getMonth()]}
+function plural(n,a,b){return n===1?a:b}
+function hash(t){var h=7;for(var i=0;i<t.length;i++)h=(h*31+t.charCodeAt(i))>>>0;return h%3}
+function num(n){return Number(n||0).toLocaleString('pt-BR')}
+function fmtTime(min){min=Math.round(min||0);if(min<60)return min+' min';var h=Math.floor(min/60),m=min%60;return h+'h '+pad(m)+'min'}
+function getBook(id){for(var i=0;i<books.length;i++)if(books[i].id===id)return books[i];return null}
+function sched(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;render()})}
+function toast(msg){var t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},3600)}
+function fail(e){console.error(e);toast(e&&e.code==='quota_exceeded'?'O limite de dados da página foi atingido.':'Não consegui salvar. Tente de novo em instantes.')}
+function showErr(id,msg){var e=$(id);e.textContent=msg;e.hidden=false}
+function clearErr(id){$(id).hidden=true}
+function bookNo(b){var s=books.slice().sort(function(a,c){return (a.createdAt||0)-(c.createdAt||0)});for(var i=0;i<s.length;i++)if(s[i].id===b.id)return pad(i+1);return '--'}
+
+/* cálculos */
+function dayMap(){
+  var m={};
+  sessions.forEach(function(s){var k=s.date;if(!k)return;if(!m[k])m[k]={pages:0,minutes:0};m[k].pages+=s.pages||0;m[k].minutes+=s.minutes||0});
+  return m;
+}
+function streakInfo(by,today){
+  function has(k){return by[k]&&(by[k].pages>0||by[k].minutes>0)}
+  var d=parse(today),cur=0;
+  if(!has(today))d=addDays(d,-1);
+  while(has(ymd(d))){cur++;d=addDays(d,-1)}
+  return {cur:cur,done:!!has(today)};
+}
+function monthEntries(y,m,today){
+  var mk=y+'-'+pad(m+1), map={}, list=[], cur=(today.slice(0,7)===mk);
+  function ent(b){if(!map[b.id]){map[b.id]={book:b,pages:0,minutes:0,days:{}};list.push(map[b.id])}return map[b.id]}
+  sessions.forEach(function(s){
+    if(!s.date||s.date.slice(0,7)!==mk)return;
+    var b=getBook(s.bookId);if(!b)return;
+    var e=ent(b);e.pages+=s.pages||0;e.minutes+=s.minutes||0;e.days[s.date]=1;
+  });
+  books.forEach(function(b){
+    if((b.startedAt&&b.startedAt.slice(0,7)===mk)||(b.finishedAt&&b.finishedAt.slice(0,7)===mk)||(cur&&b.status==='lendo'))ent(b);
+  });
+  list.forEach(function(e){
+    var ds=Object.keys(e.days).sort();
+    if(!ds.length){var b=e.book;if(b.startedAt&&b.startedAt.slice(0,7)===mk)ds.push(b.startedAt);if(b.finishedAt&&b.finishedAt.slice(0,7)===mk&&ds.indexOf(b.finishedAt)<0)ds.push(b.finishedAt);ds.sort()}
+    e.first=ds[0]||null;e.last=ds.length?ds[ds.length-1]:null;e.nd=Object.keys(e.days).length;
+  });
+  list.sort(function(a,b){return (a.first||'9').localeCompare(b.first||'9')||(a.book.createdAt||0)-(b.book.createdAt||0)});
+  return list;
+}
+function monthStats(es,y,m){
+  var mk=y+'-'+pad(m+1),pages=0,min=0,days={};
+  sessions.forEach(function(s){if(s.date&&s.date.slice(0,7)===mk){pages+=s.pages||0;min+=s.minutes||0;days[s.date]=1}});
+  return {books:es.length,pages:pages,minutes:min,days:Object.keys(days).length};
+}
+
+/* capas */
+function coverHTML(b){
+  var inner;
+  if(b.cover)inner='<img class="cv" src="'+esc(coverSrc(b.cover))+'" alt="Capa de '+esc(b.title)+'" loading="lazy" decoding="async">';
+  else inner=placeholder(b);
+  return '<span class="img">'+inner+'</span>';
+}
+function placeholder(b){
+  return '<span class="ph" style="--tn:'+(hash(b.title||'')*4)+'%"><span class="pt">'+esc(b.title)+'</span><span class="pa">'+esc(b.author||'')+'</span></span>';
+}
+document.addEventListener('error',function(e){
+  var t=e.target;
+  if(t&&t.tagName==='IMG'&&t.classList.contains('cv')){
+    var box=t.parentNode,title=t.getAttribute('alt')||'';
+    var ph=document.createElement('span');ph.className='ph';
+    ph.innerHTML='<span class="pt">'+esc(title.replace(/^Capa de /,''))+'</span><span class="pa"></span>';
+    box.replaceChild(ph,t);
+  }
+},true);
+function ruler(p,cls){return '<span class="ruler tk '+(cls||'')+'" aria-hidden="true"><i class="tk" style="width:'+p+'%"></i></span>'}
+function pct(b){var t=b.totalPages||0;return t?Math.min(100,Math.round((b.currentPage||0)/t*100)):0}
+
+/* renderização */
+function render(){
+  var now=new Date(), today=ymd(now), by=dayMap(), goal=Math.max(1,goals.dailyPages||20);
+  var loaded=got.books&&got.sessions&&got.goals;
+  $('app').classList.toggle('color',colorMode);
+  var td=by[today]||{pages:0}, st=streakInfo(by,today);
+  $('hoje').innerHTML='Hoje <b>'+td.pages+'</b>/'+goal+' p '+ruler(Math.min(100,td.pages/goal*100),'mini')+' Seq. <b>'+st.cur+'</b> d';
+  var banner=$('banner');
+  if(dbFailed){banner.hidden=false;banner.textContent='Não consegui abrir o armazenamento do navegador. Saia do modo de navegação privada e recarregue.'}else banner.hidden=true;
+  document.querySelectorAll('.bar .sbtn,.bar [data-action="open-book"]').forEach(function(b){b.disabled=dbFailed});
+  $('btn-view').textContent=view.mode==='year'?'Mês':'Índice';
+  $('stage').innerHTML=view.mode==='year'?yearHTML(today,by,loaded):monthHTML(today,by,loaded);
+
+  var sh=$('d-sheet'),open=!!detailId&&!!getBook(detailId);
+  if(detailId&&!open&&loaded)detailId=null;
+  $('m-detail').hidden=!open;
+  if(open){var sc=sh.scrollTop;sh.innerHTML=detailHTML(getBook(detailId),today);sh.scrollTop=sc}
+}
+
+function monthHTML(today,by,loaded){
+  var y=view.y,m=view.m,es=monthEntries(y,m,today),ms=monthStats(es,y,m);
+  var cy=parseInt(today.slice(0,4),10),cm=parseInt(today.slice(5,7),10)-1;
+  var isFuture=y>cy||(y===cy&&m>cm), canLog=!isFuture;
+  var items=es.map(function(e){
+    var b=e.book,a=e.first?pad(parse(e.first).getDate()):'--',z=(e.last&&e.last!==e.first)?pad(parse(e.last).getDate()):'';
+    var lab=e.pages>0?'+'+num(e.pages)+'p':(b.status==='concluido'?'fim':'');
+    var ttl=b.title+(b.author?' — '+b.author:'')+(e.pages?'\n'+e.pages+' págs em '+e.nd+' '+plural(e.nd,'dia','dias')+' neste mês':'');
+    return '<button class="item" type="button" data-action="detail" data-id="'+esc(b.id)+'" title="'+esc(ttl)+'" aria-label="Abrir o registro de '+esc(b.title)+'">'+
+      '<span class="plate">'+coverHTML(b)+'<span class="strip">'+ruler(pct(b))+'<span class="lab">'+esc(lab)+'</span></span></span>'+
+      '<span class="nums"><span>'+a+'</span><span>'+z+'</span></span></button>';
+  }).join('');
+  var ghosts='',gn=Math.max(0,12-es.length);
+  for(var g=0;g<gn;g++){
+    var first=(g===0&&canLog);
+    ghosts+= first?
+      '<button class="item ghost on" type="button" data-action="open-log" data-date="'+(y===cy&&m===cm?today:ymd(new Date(y,m+1,0)))+'" aria-label="Registrar uma leitura neste mês"><span class="plate"><span class="img"><span class="plus">+<small>registrar</small></span></span><span class="strip"></span></span><span class="nums"><span>--</span><span></span></span></button>':
+      '<div class="item ghost" aria-hidden="true"><span class="plate"><span class="img"></span><span class="strip"></span></span><span class="nums"><span>--</span><span></span></span></div>';
+  }
+  var dim=new Date(y,m+1,0).getDate(),dstrip='';
+  for(var d=1;d<=dim;d++){
+    var k=y+'-'+pad(m+1)+'-'+pad(d),v=by[k],cls=(v&&(v.pages>0||v.minutes>0))?'r':'';
+    if(k===today)cls+=' t';
+    dstrip+='<span class="'+cls+'" title="'+d+' '+MON[m]+': '+(v?v.pages+' págs, '+v.minutes+' min':'sem leitura')+'">'+pad(d)+'</span>';
+  }
+  var wk=Math.floor(dim/7),rest=dim%7;
+  var note=(!es.length&&loaded)?'<p class="empty-note">'+(isFuture?'Este mês ainda não chegou.':(y===cy&&m===cm?'Nenhuma leitura registrada em '+MONL[m]+' ainda. Toque no “+” para registrar a primeira.':'Nenhuma leitura registrada em '+MONL[m]+' de '+y+'.'))+'</p>':
+    (!loaded&&!dbFailed?'<p class="empty-note">Carregando suas leituras…</p>':'');
+  return '<section class="poster" aria-label="'+MONL[m]+' de '+y+'">'+
+    '<div class="grid">'+items+ghosts+'</div>'+note+
+    '<div class="days" aria-label="Dias do mês">'+dstrip+'</div>'+
+    '<footer class="colo">'+
+      '<div class="c1"><button class="arrow" type="button" data-action="step" data-d="-1" aria-label="Mês anterior">←</button><span class="mo">Mês n.º '+pad(m+1)+' &nbsp; '+MONL[m]+'</span><button class="arrow" type="button" data-action="step" data-d="1" aria-label="Próximo mês">→</button></div>'+
+      '<div class="c2">Calendário de leituras ( '+y+' )</div>'+
+      '<div class="c3">'+ms.books+' '+plural(ms.books,'livro','livros')+' // '+num(ms.pages)+' '+plural(ms.pages,'página','páginas')+'</div>'+
+      '<div class="c4">'+ms.days+' '+plural(ms.days,'dia lido','dias lidos')+' // '+dim+' dias no mês</div>'+
+      '<div class="c5">'+fmtTime(ms.minutes)+' de leitura // '+wk+' semanas e '+rest+' '+plural(rest,'dia','dias')+'</div>'+
+      '<button class="tbtn" type="button" data-action="toggle-color">Capas: '+(colorMode?'cor':'p&amp;b')+'</button>'+
+    '</footer></section>';
+}
+
+function yearHTML(today,by,loaded){
+  var y=view.y,cy=parseInt(today.slice(0,4),10),cm=parseInt(today.slice(5,7),10)-1;
+  var tp=0,tb={},td=0,cards='';
+  for(var m=0;m<12;m++){
+    var es=monthEntries(y,m,today),ms=monthStats(es,y,m);
+    tp+=ms.pages;td+=ms.days;
+    var mos='';
+    for(var c=0;c<8;c++){
+      if(es[c])mos+=coverHTML(es[c].book);else mos+='<span class="blank"></span>';
+    }
+    cards+='<button class="mcard'+((y===cy&&m===cm)?' cur':'')+'" type="button" data-action="goto" data-m="'+m+'" aria-label="Abrir '+MONL[m]+' de '+y+'">'+
+      '<span class="mos">'+mos+'</span>'+
+      '<span class="mc-t"><b>'+pad(m+1)+'</b><span>'+MONL[m]+'</span></span>'+
+      '<span class="mc-s">'+(ms.books?ms.books+' '+plural(ms.books,'livro','livros')+' · '+num(ms.pages)+' p':'—')+'</span></button>';
+  }
+  var fin=books.filter(function(b){return b.status==='concluido'&&b.finishedAt&&parseInt(b.finishedAt.slice(0,4),10)===y}).length;
+  var yg=Math.max(1,goals.yearlyBooks||12);
+  var want=books.filter(function(b){return b.status==='quero'}).sort(function(a,b){return (a.createdAt||0)-(b.createdAt||0)});
+  var wl='<section class="wl"><h3>Lista de leitura ('+want.length+')</h3>'+(want.length?'<ul class="rows">'+want.map(function(b){
+    return '<li class="rw"><div><b>'+esc(b.title)+'</b><small>'+(b.author?esc(b.author)+' · ':'')+(b.totalPages||'?')+' págs</small></div><button class="sbtn line" type="button" data-action="start" data-id="'+esc(b.id)+'">Começar</button><button class="x" type="button" data-action="open-book" data-id="'+esc(b.id)+'">Editar</button></li>';
+  }).join('')+'</ul>':'<p class="muted">Nada na fila. Cadastre um livro com a situação “Quero ler” e ele aparece aqui.</p>')+'</section>';
+  return '<section class="year">'+
+    '<div class="y-head"><button class="arrow" type="button" data-action="step" data-d="-1" aria-label="Ano anterior">←</button><h2>Ano '+y+'</h2><button class="arrow" type="button" data-action="step" data-d="1" aria-label="Próximo ano">→</button></div>'+
+    '<p class="y-sub">'+fin+' de '+yg+' livros concluídos // '+num(tp)+' págs // '+td+' dias lidos</p>'+
+    '<div class="months">'+cards+'</div>'+wl+'</section>';
+}
+
+function detailHTML(b,today){
+  var ss=sessions.filter(function(s){return s.bookId===b.id}).sort(function(a,c){return (c.date||'').localeCompare(a.date||'')||(c.createdAt||0)-(a.createdAt||0)});
+  var asc=ss.slice().reverse(), tp=0,tm=0,days={};
+  ss.forEach(function(s){tp+=s.pages||0;tm+=s.minutes||0;days[s.date]=1});
+  var nd=Object.keys(days).length,total=b.totalPages||0,cur=b.currentPage||0;
+  var stl={lendo:'Lendo',quero:'Quero ler',concluido:'Concluído'}[b.status]||'';
+  var start=b.startedAt||(asc.length?asc[0].date:null), lastD=ss.length?ss[0].date:null;
+  var since=ymd(addDays(parse(today),-13)),rec=ss.filter(function(s){return s.date>=since}).reduce(function(a,s){return a+(s.pages||0)},0),per=rec/14,fc='';
+  if(b.status==='lendo'&&per>0&&total>cur){var dl=Math.ceil((total-cur)/per);fc=short(ymd(addDays(parse(today),dl)))+' <small>(em ~'+dl+' '+plural(dl,'dia','dias')+')</small>'}
+  var facts=[
+    ['Início',start?short(start):'—'],
+    [b.status==='concluido'?'Término':'Último registro',b.status==='concluido'&&b.finishedAt?short(b.finishedAt):(lastD?short(lastD):'—')],
+    ['Dias lidos',nd+''],
+    ['Média por dia lido',nd?Math.round(tp/nd)+' <small>págs</small>':'—'],
+    ['Tempo total',tm?fmtTime(tm):'—'],
+    [b.status==='concluido'?'Nota':'Previsão de término',b.status==='concluido'?(b.rating?'★ '+b.rating+' <small>de 5</small>':'sem nota'):(fc||'<small>precisa de registros</small>')]
+  ].map(function(f){return '<div><dt>'+f[0]+'</dt><dd>'+f[1]+'</dd></div>'}).join('');
+  var groups={},order=[];
+  ss.forEach(function(s){var k=(s.date||'').slice(0,7);if(!groups[k]){groups[k]=[];order.push(k)}groups[k].push(s)});
+  var log=order.length?order.map(function(k){
+    var gs=groups[k],gp=gs.reduce(function(a,s){return a+(s.pages||0)},0),mi=parseInt(k.slice(5,7),10)-1;
+    return '<div class="lg"><div class="lg-h"><span>'+MONL[mi]+' '+k.slice(0,4)+'</span><span>'+gs.length+' '+plural(gs.length,'sessão','sessões')+' · '+num(gp)+' p</span></div>'+gs.map(function(s){
+      var conf=confirmDel===s.id;
+      return '<div class="se"><span class="d">'+pad(parse(s.date).getDate())+'</span><span class="n">'+(s.note?esc(s.note):'')+'</span><span class="a">'+(s.pages||0)+' p'+(s.minutes?' · '+s.minutes+' min':'')+'</span><button class="x'+(conf?' conf':'')+'" type="button" data-action="del-session" data-id="'+esc(s.id)+'" aria-label="Excluir sessão">'+(conf?'Excluir?':'✕')+'</button></div>';
+    }).join('')+'</div>';
+  }).join(''):'<p class="muted">Nenhuma sessão registrada para este livro ainda.</p>';
+  return '<button class="tbtn close" type="button" data-action="close-detail">Fechar ✕</button>'+
+    '<div class="d-grid"><div class="d-plate"><span class="plate" style="display:block"><span class="plate">'+coverHTML(b)+'</span></span></div>'+
+    '<div class="d-info"><p class="eb">N.º '+bookNo(b)+' // '+stl+'</p><h2 id="d-title">'+esc(b.title)+'</h2><p class="d-au">'+esc(b.author||'Autor não informado')+'</p>'+
+    '<div class="d-prog">'+ruler(pct(b),'big')+'<p>'+num(cur)+' / '+num(total)+' págs // '+pct(b)+'%</p></div>'+
+    '<dl class="facts">'+facts+'</dl>'+
+    '<div class="d-acts"><button class="sbtn" type="button" data-action="open-log" data-book="'+esc(b.id)+'">Registrar</button><button class="sbtn line" type="button" data-action="open-book" data-id="'+esc(b.id)+'">Editar</button><button class="sbtn line" type="button" data-action="pick-cover" data-id="'+esc(b.id)+'">'+(b.cover?'Trocar capa':'Adicionar capa')+'</button></div></div></div>'+
+    '<section class="sec"><h3>Curva de leitura</h3>'+chartHTML(b,asc,today)+'</section>'+
+    '<section class="sec"><h3>Registro ('+ss.length+')</h3>'+log+'</section>';
+}
+
+function chartHTML(b,asc,today){
+  if(!asc.length)return '<p class="muted">A curva aparece depois da primeira sessão registrada.</p>';
+  var W=360,H=130,ML=34,MR=10,MT=12,MB=24,iw=W-ML-MR,ih=H-MT-MB;
+  var t0=parse(asc[0].date), lastDate=asc[asc.length-1].date;
+  var endKey=(b.status==='lendo'&&today>lastDate)?today:lastDate;
+  var t1=parse(endKey), span=Math.max(1,Math.round((t1-t0)/86400000));
+  var cum=0,tot=Math.max(b.totalPages||0,1),pts=[[0,0]],maxc=0;
+  asc.forEach(function(s){cum+=s.pages||0;pts.push([Math.round((parse(s.date)-t0)/86400000),cum]);if(cum>maxc)maxc=cum});
+  tot=Math.max(tot,maxc);
+  function X(d){return (ML+d/span*iw).toFixed(1)}
+  function Y(v){return (MT+ih-v/tot*ih).toFixed(1)}
+  var path='M'+pts.map(function(p){return X(p[0])+','+Y(p[1])}).join(' L');
+  var dots=pts.slice(1).map(function(p){return '<rect class="dt" x="'+(X(p[0])-2)+'" y="'+(Y(p[1])-2)+'" width="4" height="4"/>'}).join('');
+  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Páginas acumuladas ao longo do tempo">'+
+    '<line class="ax" x1="'+ML+'" y1="'+(MT+ih)+'" x2="'+(W-MR)+'" y2="'+(MT+ih)+'"/><line class="ax" x1="'+ML+'" y1="'+MT+'" x2="'+ML+'" y2="'+(MT+ih)+'"/>'+
+    '<line class="tot" x1="'+ML+'" y1="'+MT+'" x2="'+(W-MR)+'" y2="'+MT+'"/>'+
+    '<text x="'+(ML-6)+'" y="'+(MT+3)+'" text-anchor="end">'+num(tot)+'</text><text x="'+(ML-6)+'" y="'+(MT+ih+3)+'" text-anchor="end">0</text>'+
+    '<text x="'+ML+'" y="'+(H-6)+'">'+short(asc[0].date)+'</text><text x="'+(W-MR)+'" y="'+(H-6)+'" text-anchor="end">'+short(endKey)+'</text>'+
+    '<path class="ln" d="'+path+'"/>'+dots+'</svg>';
+}
+
+/* modais */
+function openModal(id){
+  lastFocus=document.activeElement;
+  $(id).hidden=false;
+  var f=$(id).querySelector('input:not([type=hidden]):not([type=file]),select,textarea');
+  setTimeout(function(){if(f)f.focus()},30);
+}
+function closeForms(){
+  var was=false;
+  ['m-log','m-book','m-goals'].forEach(function(i){if(!$(i).hidden){was=true;$(i).hidden=true}});
+  confirmBookDel=false;
+  return was;
+}
+function closeDetail(){detailId=null;confirmDel=null;$('m-detail').hidden=true;sched()}
+function curOf(){var b=getBook($('s-book').value);return b?(b.currentPage||0):0}
+function logHint(){
+  var b=getBook($('s-book').value),p=Math.floor(Number($('s-pages').value)),h=$('s-hint');
+  if(!b){h.textContent='';return}
+  var cur=b.currentPage||0,total=b.totalPages||0;
+  if(b.status==='concluido'){h.textContent='Livro já concluído. Esta sessão entra como releitura.';return}
+  if(!(p>0)){h.textContent='Você está na página '+cur+(total?' de '+total:'')+'.';return}
+  var end=cur+p;
+  if(total&&end>=total)h.textContent=end>total?'Isso passa do fim do livro. Vou contar só até a página '+total+'.':'Isso conclui o livro.';
+  else h.textContent='Você vai para a página '+end+(total?' de '+total+' ('+Math.round(end/total*100)+'%)':'')+'.';
+}
+function openLog(bookId,date){
+  clearErr('s-err');
+  if(!books.length){toast('Cadastre um livro antes de registrar uma leitura.');openBook(null);return}
+  function opt(b){return '<option value="'+esc(b.id)+'">'+esc(b.title)+(b.author?' — '+esc(b.author):'')+'</option>'}
+  function grp(label,st){
+    var l=books.filter(function(b){return b.status===st}).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0)});
+    return l.length?'<optgroup label="'+label+'">'+l.map(opt).join('')+'</optgroup>':'';
+  }
+  $('s-book').innerHTML=grp('Lendo agora','lendo')+grp('Quero ler','quero')+grp('Concluídos (releitura)','concluido')+'<option value="__new">+ Cadastrar novo livro…</option>';
+  if(bookId&&getBook(bookId))$('s-book').value=bookId;
+  $('s-pages').value='';$('s-stop').value='';$('s-min').value='';$('s-note').value='';
+  var today=ymd(new Date());
+  $('s-date').max=today;$('s-date').value=(date&&date<=today)?date:today;
+  logHint();
+  openModal('m-log');
+}
+function syncBookFields(){
+  var s=$('b-status').value;
+  $('b-cur-w').hidden=s!=='lendo';
+  $('b-rat-w').hidden=s!=='concluido';
+}
+function authorList(){
+  var seen={},out=[];
+  books.forEach(function(b){var a=(b.author||'').trim();if(!a)return;var k=a.toLowerCase();if(!seen[k]){seen[k]=1;out.push(a)}});
+  return out.sort(function(a,b){return a.localeCompare(b,'pt-BR')});
+}
+function syncAuthor(){$('b-author-new-w').hidden=$('b-author-sel').value!=='__new'}
+function fillAuthors(cur){
+  var list=authorList(),sel=$('b-author-sel'),c=(cur||'').trim();
+  sel.innerHTML='<option value="">Selecione o autor…</option>'+list.map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>'}).join('')+'<option value="__new">+ Novo autor…</option>';
+  var match=list.filter(function(a){return a.toLowerCase()===c.toLowerCase()})[0];
+  if(match)sel.value=match;else if(c||!list.length)sel.value='__new';else sel.value='';
+  $('b-author').value=sel.value==='__new'?c:'';
+  syncAuthor();
+}
+function openBook(id,status,hint){
+  clearErr('b-err');confirmBookDel=false;editingId=id||null;
+  var b=id?getBook(id):null;
+  $('t-book').textContent=b?'Editar livro':'Novo livro';
+  $('b-sub').textContent=hint||(b?'Ajuste os dados ou mude a situação.':'Cadastre o que você quer acompanhar.');
+  $('b-title').value=b?b.title:'';fillAuthors(b&&b.author?b.author:'');
+  $('b-total').value=b&&b.totalPages?b.totalPages:'';
+  $('b-status').value=b?b.status:(status||'lendo');
+  $('b-current').value=b?(b.currentPage||0):0;
+  $('b-rating').value=b&&b.rating?String(b.rating):'';
+  $('b-cover').value='';
+  $('b-del').hidden=!b;$('b-del').textContent='Excluir livro';
+  syncBookFields();
+  openModal('m-book');
+}
+function openGoals(){
+  clearErr('g-err');
+  $('g-daily').value=goals.dailyPages||20;$('g-yearly').value=goals.yearlyBooks||12;
+  openModal('m-goals');
+}
+
+/* capas: redimensiona e envia */
+function downscale(file,max){
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){
+      var r=Math.min(1,max/Math.max(img.width,img.height)),c=document.createElement('canvas');
+      c.width=Math.max(1,Math.round(img.width*r));c.height=Math.max(1,Math.round(img.height*r));
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      c.toBlob(function(b){b?res(b):rej(new Error('encode'))},'image/jpeg',.88);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('load'))};
+    img.src=url;
+  });
+}
+async function uploadCover(file){
+  var assets=(window.claude&&window.claude.use)?await window.claude.use('assets'):null;
+  if(!assets){toast('O envio de capas só funciona para quem pode editar esta página.');return null}
+  var blob=await downscale(file,900),r=await assets.upload(blob);
+  return r.id;
+}
+async function replaceCover(bookId,file){
+  var b=getBook(bookId);if(!b||!db)return;
+  try{
+    var id=await uploadCover(file);if(!id)return;
+    var old=b.cover;
+    await db.doc('books/'+bookId).update({cover:id});
+    toast('Capa atualizada');
+    if(old){try{var a=await window.claude.use('assets');if(a)await a.delete(old)}catch(e){}}
+  }catch(err){console.error(err);toast('Não consegui enviar a imagem. Tente um JPG ou PNG menor.')}
+}
+
+/* gravações */
+async function saveSession(e){
+  e.preventDefault();clearErr('s-err');
+  if(!db)return;
+  var b=getBook($('s-book').value),pages=Math.floor(Number($('s-pages').value)),minutes=Math.max(0,Math.floor(Number($('s-min').value)||0));
+  var date=$('s-date').value||ymd(new Date());
+  if(!b||!(pages>=1)){showErr('s-err','Escolha o livro e informe quantas páginas você leu.');return}
+  if(date>ymd(new Date())){showErr('s-err','O dia não pode estar no futuro.');return}
+  var cur=b.currentPage||0,total=b.totalPages||0;
+  if(total&&total>cur)pages=Math.min(pages,total-cur);
+  var end=total?Math.min(total,cur+pages):cur+pages;
+  var btn=$('s-save');btn.disabled=true;
+  try{
+    await db.collection('sessions').doc().set({bookId:b.id,bookTitle:b.title,pages:pages,minutes:minutes,date:date,note:$('s-note').value.trim(),createdAt:Date.now()});
+    var patch={currentPage:end},finished=false;
+    if(b.status!=='concluido'){
+      if(b.status!=='lendo'){patch.status='lendo';if(!b.startedAt)patch.startedAt=date}
+      if(total&&end>=total){patch.status='concluido';patch.finishedAt=date;finished=true}
+    }else patch.currentPage=total||end;
+    await db.doc('books/'+b.id).update(patch);
+    closeForms();
+    var dk=date.slice(0,7);view.y=parseInt(dk.slice(0,4),10);view.m=parseInt(dk.slice(5,7),10)-1;if(view.mode==='year'&&!detailId)view.mode='month';
+    if(finished){toast('Você terminou “'+b.title+'”!');openBook(b.id,null,'Terminou! Quer dar uma nota ao livro?')}
+    else toast(pages+' '+plural(pages,'página registrada','páginas registradas'));
+    sched();
+  }catch(err){fail(err)}finally{btn.disabled=false}
+}
+async function saveBook(e){
+  e.preventDefault();clearErr('b-err');
+  if(!db)return;
+  var title=$('b-title').value.trim(),total=Math.floor(Number($('b-total').value)),status=$('b-status').value,today=ymd(new Date());
+  if(!title){showErr('b-err','Informe o título.');return}
+  if(!(total>=1)){showErr('b-err','Informe o total de páginas, para calcular seu progresso.');return}
+  var cur=Math.max(0,Math.floor(Number($('b-current').value)||0));
+  var b=editingId?getBook(editingId):null;
+  var author=$('b-author-sel').value==='__new'?$('b-author').value.trim():$('b-author-sel').value;
+  if(author&&$('b-author-sel').value==='__new'&&(author===author.toLowerCase()||author===author.toUpperCase())){
+    author=author.toLowerCase().split(/\s+/).map(function(w,i){return (i>0&&/^(de|da|do|das|dos|e|di|du|van|von|la|le)$/.test(w))?w:w.charAt(0).toUpperCase()+w.slice(1)}).join(' ');
+  }
+  if(author){var ex=authorList().filter(function(a){return a.toLowerCase()===author.toLowerCase()})[0];if(ex)author=ex}
+  var data={title:title,author:author,totalPages:total,status:status};
+  if(status==='quero'){data.currentPage=0}
+  else if(status==='concluido'){data.currentPage=total;data.finishedAt=(b&&b.finishedAt)||today;data.rating=$('b-rating').value?Number($('b-rating').value):null;if(!(b&&b.startedAt))data.startedAt=today}
+  else{
+    data.currentPage=Math.min(cur,total);data.finishedAt=null;data.rating=null;
+    if(!(b&&b.startedAt))data.startedAt=today;
+    if(cur>=total){data.status='concluido';data.currentPage=total;data.finishedAt=today}
+  }
+  var btn=$('b-save');btn.disabled=true;
+  try{
+    var f=$('b-cover').files[0],oldCover=b?b.cover:null,newCover=null;
+    if(f){try{newCover=await uploadCover(f)}catch(er){console.error(er);toast('A capa não pôde ser enviada, o resto foi salvo.')}}
+    if(newCover)data.cover=newCover;
+    if(b)await db.doc('books/'+b.id).update(data);
+    else{data.createdAt=Date.now();if(data.startedAt===undefined)data.startedAt=null;if(data.finishedAt===undefined)data.finishedAt=null;await db.collection('books').doc().set(data)}
+    if(newCover&&oldCover){try{var a=await window.claude.use('assets');if(a)await a.delete(oldCover)}catch(er){}}
+    closeForms();toast(b?'Livro atualizado':'Livro cadastrado');
+  }catch(err){fail(err)}finally{btn.disabled=false}
+}
+async function deleteBook(){
+  if(!db||!editingId)return;
+  if(!confirmBookDel){confirmBookDel=true;$('b-del').textContent='Confirmar exclusão';return}
+  try{await db.doc('books/'+editingId).delete();if(detailId===editingId)detailId=null;closeForms();toast('Livro excluído. As sessões continuam contando nas estatísticas.');sched()}catch(err){fail(err)}
+}
+async function saveGoals(e){
+  e.preventDefault();clearErr('g-err');
+  var d=Math.floor(Number($('g-daily').value)),y=Math.floor(Number($('g-yearly').value));
+  if(!(d>=1)||!(y>=1)){showErr('g-err','Use números a partir de 1.');return}
+  try{await db.doc('settings/goals').set({dailyPages:d,yearlyBooks:y});closeForms();toast('Metas salvas')}catch(err){fail(err)}
+}
+async function startBook(id){
+  var b=getBook(id);if(!b||!db)return;
+  try{await db.doc('books/'+id).update({status:'lendo',startedAt:b.startedAt||ymd(new Date())});toast('“'+b.title+'” começou')}catch(err){fail(err)}
+}
+async function deleteSession(id){
+  var s=null;for(var i=0;i<sessions.length;i++)if(sessions[i].id===id)s=sessions[i];
+  if(!s||!db)return;
+  try{
+    await db.doc('sessions/'+id).delete();
+    var b=getBook(s.bookId);
+    if(b){
+      var cur=Math.max(0,(b.currentPage||0)-(s.pages||0)),patch={currentPage:cur};
+      if(b.status==='concluido'&&b.totalPages&&cur<b.totalPages){patch.status='lendo';patch.finishedAt=null}
+      await db.doc('books/'+b.id).update(patch);
+    }
+    toast('Sessão excluída');
+  }catch(err){fail(err)}
+}
+
+/* eventos */
+function step(d){
+  if(view.mode==='year'){view.y+=d}
+  else{var m=view.m+d;view.y+=Math.floor(m/12);view.m=((m%12)+12)%12}
+  sched();
+}
+document.addEventListener('click',function(e){
+  var el=e.target.closest('[data-action]');
+  var a=el?el.getAttribute('data-action'):null;
+  if(confirmDel&&a!=='del-session'){confirmDel=null;sched()}
+  if(!el){if(e.target.classList&&e.target.classList.contains('scrim')){if(!closeForms())closeDetail()}return}
+  var id=el.getAttribute('data-id');
+  switch(a){
+    case 'open-log':openLog(el.getAttribute('data-book'),el.getAttribute('data-date'));break;
+    case 'open-book':openBook(id||null,el.getAttribute('data-status'));break;
+    case 'open-goals':openGoals();break;
+    case 'close':closeForms();break;
+    case 'detail':lastFocus=el;detailId=id;confirmDel=null;sched();setTimeout(function(){var c=document.querySelector('#d-sheet .close');if(c)c.focus()},60);break;
+    case 'close-detail':closeDetail();break;
+    case 'step':step(Number(el.getAttribute('data-d')));break;
+    case 'goto':view.m=Number(el.getAttribute('data-m'));view.mode='month';sched();window.scrollTo(0,0);break;
+    case 'toggle-view':view.mode=view.mode==='year'?'month':'year';sched();break;
+    case 'toggle-color':colorMode=!colorMode;try{localStorage.setItem('leituras-cor',colorMode?'1':'0')}catch(er){}sched();break;
+    case 'start':startBook(id);break;
+    case 'pick-cover':coverTarget=id;$('cover-pick').value='';$('cover-pick').click();break;
+    case 'del-session':if(confirmDel===id){confirmDel=null;deleteSession(id)}else{confirmDel=id;sched()}break;
+  }
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'){if(!closeForms()&&detailId)closeDetail();return}
+  var tag=(e.target&&e.target.tagName)||'';
+  if(/INPUT|SELECT|TEXTAREA/.test(tag))return;
+  var anyOpen=!$('m-log').hidden||!$('m-book').hidden||!$('m-goals').hidden||!$('m-detail').hidden;
+  if(anyOpen)return;
+  if(e.key==='ArrowLeft')step(-1);else if(e.key==='ArrowRight')step(1);
+});
+$('cover-pick').addEventListener('change',function(){var f=this.files[0];if(f&&coverTarget)replaceCover(coverTarget,f)});
+$('f-log').addEventListener('submit',saveSession);
+$('f-book').addEventListener('submit',saveBook);
+$('f-goals').addEventListener('submit',saveGoals);
+$('b-del').addEventListener('click',deleteBook);
+$('b-status').addEventListener('change',syncBookFields);
+$('b-author-sel').addEventListener('change',function(){syncAuthor();if(this.value==='__new')$('b-author').focus()});
+$('s-book').addEventListener('change',function(){if(this.value==='__new'){closeForms();openBook(null);return}var p=Math.floor(Number($('s-pages').value));$('s-stop').value=p>0?curOf()+p:'';logHint()});
+$('s-pages').addEventListener('input',function(){var p=Math.floor(Number($('s-pages').value));$('s-stop').value=p>0?curOf()+p:'';logHint()});
+$('s-stop').addEventListener('input',function(){var x=Math.floor(Number($('s-stop').value)),p=x-curOf();$('s-pages').value=p>0?p:'';logHint()});
+
+/* dados */
+render();
+var dbp=(window.claude&&window.claude.use)?window.claude.use('db'):Promise.resolve(null);
+dbp.then(function(d){
+  if(!d){dbFailed=true;sched();return}
+  db=d;
+  function onErr(err){console.error(err);dbFailed=true;sched()}
+  db.collection('books').onSnapshot(function(s){books=s.docs.map(function(x){var o=Object.assign({},x.data());o.id=x.id;return o});got.books=true;sched()},onErr);
+  db.collection('sessions').onSnapshot(function(s){sessions=s.docs.map(function(x){var o=Object.assign({},x.data());o.id=x.id;return o});got.sessions=true;sched()},onErr);
+  db.doc('settings/goals').onSnapshot(function(s){var o=s.data()||{};goals={dailyPages:o.dailyPages||20,yearlyBooks:o.yearlyBooks||12};got.goals=true;sched()},onErr);
+}).catch(function(err){console.error(err);dbFailed=true;sched()});
+})();
+</script>
+
+<script>
+(function(){
+  var $=function(i){return document.getElementById(i)};
+  $('bk-out').addEventListener('click',function(){window.exportBackup()});
+  $('bk-in').addEventListener('click',function(){$('bk-file').click()});
+  $('bk-file').addEventListener('change',function(){
+    var f=this.files&&this.files[0];if(!f)return;
+    window.importBackup(f).then(function(){alert('Cópia importada.')}).catch(function(){alert('Arquivo inválido.')});
+    this.value='';
+  });
+  if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+})();
+</script>
+</body></html>
