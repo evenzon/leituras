@@ -10,6 +10,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<script>
+(function(){try{var t=localStorage.getItem('leituras-theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t)}catch(e){}})();
+</script>
 <script src="local-db.js"></script>
 <title>Minhas Leituras</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,6 +20,11 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
 <style>
 [hidden]{display:none!important}
+.tswitch{position:relative;display:inline-block;width:46px;height:26px;padding:0;margin:0 8px 0 0;border:1px solid var(--ink);background:transparent;cursor:pointer;-webkit-tap-highlight-color:transparent;vertical-align:middle}
+.tswitch .ts-knob{position:absolute;top:2px;left:2px;width:20px;height:20px;background:var(--ink);transition:transform .22s cubic-bezier(.3,.7,.3,1);pointer-events:none}
+.tswitch[aria-checked="true"] .ts-knob{transform:translateX(20px)}
+.tswitch:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
 /* Pôster de catálogo: papel cinza-quente, molduras em grade (4 colunas), numeração mono sob cada capa, rodapé editorial centralizado. Um mês por página; índice do ano; ficha de cada livro. */
 :root{
   --paper:#E7E5DE; --ink:#1A1A18; --ink-2:#5C5A53; --line:#B8B5AB; --plate:#D5D2C9; --plate-2:#C7C4BA;
@@ -218,6 +226,7 @@ button{cursor:pointer}
   <header class="bar">
     <button class="tbtn hoje" type="button" id="hoje" data-action="open-goals" aria-label="Metas e sequência"></button>
     <nav class="bar-r" aria-label="Ações">
+      <button class="tswitch" type="button" id="btn-theme" role="switch" aria-checked="false" aria-label="Tema escuro" title="Tema claro / escuro"><span class="ts-knob" aria-hidden="true"></span></button>
       <button class="tbtn" type="button" id="btn-view" data-action="toggle-view">Índice</button>
       <button class="tbtn" type="button" data-action="open-book">+ Livro</button>
       <button class="sbtn" type="button" data-action="open-log">Registrar leitura</button>
@@ -804,6 +813,25 @@ dbp.then(function(d){
     window.importBackup(f).then(function(){alert('Cópia importada.')}).catch(function(){alert('Arquivo inválido.')});
     this.value='';
   });
+
+  /* tema claro/escuro */
+  (function(){
+    var root=document.documentElement,b=$('btn-theme'),mq=window.matchMedia&&matchMedia('(prefers-color-scheme: dark)');
+    function cur(){var t=root.getAttribute('data-theme');return t||(mq&&mq.matches?'dark':'light')}
+    function paint(){
+      var t=cur();
+      b.setAttribute('aria-checked',t==='dark'?'true':'false');
+      var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',t==='dark'?'#151513':'#E7E5DE');
+    }
+    b.addEventListener('click',function(){
+      var n=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',n);
+      try{localStorage.setItem('leituras-theme',n)}catch(e){}
+      paint();
+    });
+    if(mq&&mq.addEventListener)mq.addEventListener('change',paint);
+    paint();
+  })();
   if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
 })();
 </script>
