@@ -322,7 +322,7 @@ function fmtTime(min){min=Math.round(min||0);if(min<60)return min+' min';var h=M
 function getBook(id){for(var i=0;i<books.length;i++)if(books[i].id===id)return books[i];return null}
 function sched(){if(raf)return;raf=requestAnimationFrame(function(){raf=0;render()})}
 function toast(msg){var t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){t.hidden=true},3600)}
-function fail(e){console.error(e);toast(e&&e.code==='quota_exceeded'?'O limite de dados da página foi atingido.':'Não consegui salvar. Tente de novo em instantes.')}
+function fail(e){console.error(e);toast(e&&e.code==='quota_exceeded'?'O limite de dados da página foi atingido.':'Não consegui salvar: '+((e&&(e.message||e.name))||'erro')+'.')}
 function showErr(id,msg){var e=$(id);e.textContent=msg;e.hidden=false}
 function clearErr(id){$(id).hidden=true}
 function bookNo(b){var s=books.slice().sort(function(a,c){return (a.createdAt||0)-(c.createdAt||0)});for(var i=0;i<s.length;i++)if(s[i].id===b.id)return pad(i+1);return '--'}

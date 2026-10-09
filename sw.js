@@ -1,4 +1,4 @@
-const CACHE='leituras-v1';
+const CACHE='leituras-v2';
 const CORE=['./','./index.html','./local-db.js','./manifest.webmanifest','./icon-180.png','./icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
@@ -10,6 +10,7 @@ self.addEventListener('fetch',e=>{
       if(res&&(res.ok||res.type==='opaque')){const copy=res.clone();caches.open(CACHE).then(c=>c.put(req,copy))}
       return res;
     }).catch(()=>hit);
-    return hit||net;
+    const same=new URL(req.url).origin===self.location.origin;
+    return same?net.then(r=>r||hit).catch(()=>hit):(hit||net);
   }));
 });
